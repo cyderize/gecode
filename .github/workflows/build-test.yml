@@ -1,0 +1,97 @@
+on: push
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-test:
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    strategy:
+      matrix:
+        platform: [win64, osx, linux, musl, wasm]
+        gist: ["gist", "no-gist"]
+        include:
+          - platform: win64
+            os: windows-latest
+            cmake_arch: Visual Studio 16 2019
+          - platform: osx
+            os: macos-latest
+            gist: "gist"
+            osx_architectures: "x86_64"
+          - platform: osx
+            os: macos-latest
+            gist: "no-gist"
+            osx_architectures: "x86_64;arm64"
+          - platform: linux
+            os: ubuntu-latest
+            gist: "gist"
+            container: minizinc/build-environment:qt
+          - platform: linux
+            os: ubuntu-latest
+            gist: "no-gist"
+            container: minizinc/build-environment:cpp
+          - platform: musl
+            os: ubuntu-latest
+            container: minizinc/build-environment:alpine
+          - platform: wasm
+            os: ubuntu-latest
+            container: emscripten/emsdk
+            profiler: "off"
+            config: MinSizeRel
+            pre_cmake: emcmake
+            cmake_arch: Unix Makefiles
+        exclude:
+          - platform: musl
+            gist: "gist"
+          - platform: wasm
+            gist: "gist"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v3
+        if: (matrix.cmake_arch == null || matrix.cmake_arch == 'Ninja') && matrix.container == null
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v2
+        if: matrix.gist == 'gist' && matrix.container == null
+      - name: Configure build
+        run: |
+          mkdir build
+          cd build
+          ${PRE_CMAKE} cmake -G"${CMAKE_ARCH}" .. \
+            -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
+            -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/dist/gecode \
+            -DENABLE_GIST=${ENABLE_GIST} \
+            -DENABLE_CPPROFILER=${ENABLE_PROFILER}
+        env:
+          CMAKE_BUILD_TYPE: ${{ matrix.config || 'Release' }}
+          ENABLE_GIST: ${{ matrix.gist == 'gist' }}
+          ENABLE_CPPROFILER: ${{ matrix.profiler || 'on' }}
+          PRE_CMAKE: ${{ matrix.pre_cmake }}
+          CMAKE_ARCH: ${{ matrix.cmake_arch || 'Ninja' }}
+          MACOSX_DEPLOYMENT_TARGET: "10.9"
+          CMAKE_OSX_ARCHITECTURES: ${{ matrix.osx_architectures }}
+      - name: Build Gecode
+        run: |
+          cmake --build . --config ${CMAKE_BUILD_TYPE}
+          cmake --build . --config ${CMAKE_BUILD_TYPE} --target install
+        working-directory: build
+        env:
+          CMAKE_BUILD_TYPE: ${{ matrix.config || 'Release' }}
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: gecode-${{ matrix.platform }}-${{ matrix.gist }}
+          path: dist/*
+      - name: Test Gecode
+        if: matrix.gist == 'no-gist' && matrix.platform != 'wasm'
+        run: |
+          cmake --build . --config ${CMAKE_BUILD_TYPE} --target gecode-test
+          ctest -V -C ${CMAKE_BUILD_TYPE}
+        working-directory: build
+        env:
+          CMAKE_BUILD_TYPE: ${{ matrix.config || 'Release' }}
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
