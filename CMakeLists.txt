@@ -483,13 +483,22 @@ if (${BUILD_EXAMPLES})
 endif()
 
 enable_testing()
-add_test(test gecode-test
+add_test(NAME test COMMAND $<TARGET_FILE:gecode-test>
   -iter 2 -test Branch::Int::Dense::3
-  -test Int::Linear::Int::Int::Eq::Bnd::12::4
-  -test Int::Distinct::Random
-  -test Int::Arithmetic::Mult::XYZ::Bnd::C
-  -test Int::Arithmetic::Mult::XYZ::Dom::A
-  -test Search::BAB::Sol::BalGr::Binary::Binary::Binary::1::1)
+          -test FlatZinc::magic_square
+          -test Int::Arithmetic::Abs
+          -test Int::Arithmetic::ArgMax
+          -test Int::Arithmetic::Max::Nary
+          -test Int::Cumulative::Man::Fix::0::4
+          -test Int::Distinct::Random
+          -test Int::Linear::Bool::Int::Lq
+          -test Int::MiniModel::LinExpr::Bool::352
+          -test NoGoods::Queens
+          -test Search::DFS::Sol::Binary::Nary::Binary::1::1::1
+          -test Set::Dom::Dom::Gr
+          -test Set::RelOp::ConstSSI::Union
+          -test Set::Sequence::SeqU1
+          -test Set::Wait)
 
 ## Installation Target
 # Install libraries and executables
